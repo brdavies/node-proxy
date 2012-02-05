@@ -7,8 +7,8 @@ var options = {
 
     /*   The routes. */
     router: {
-        'lab.rohben.com'  : '127.0.0.1:8081',
-        'blog.rohben.com' : '127.0.0.1:8082'
+        '*lab.rohben.com'  : '127.0.0.1:8081',
+        '*blog.rohben.com' : '127.0.0.1:8082'
     }
 };
 
