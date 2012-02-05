@@ -48,11 +48,13 @@ for (_i = 0, _len = backends.length; _i < _len; _i++) {
 find_backend = function(req) {
     var backend, m, path, pathname, _j, _k, _len2, _len3, _ref;
     pathname = url.parse(req.url).pathname;
+    console.log("pathname --> " + pathname);
     for (_j = 0, _len2 = backends.length; _j < _len2; _j++) {
         backend = backends[_j];
-        _ref = backend.paths;
+        _ref = backend.paths;        
         for (_k = 0, _len3 = _ref.length; _k < _len3; _k++) {
             path = _ref[_k];
+            console.log("  path --> " + path);
             m = path.exec(pathname);
             if (m) return backend;
         }
@@ -61,6 +63,7 @@ find_backend = function(req) {
 };
 
 proxyserver = httpProxy.createServer(function(req, res, proxy) {
+    console.log("request: " + req.url);
     backend = find_backend(req);
     if (backend) {
         proxy.proxyRequest(req, res, backend.options);
@@ -75,7 +78,30 @@ proxyserver = httpProxy.createServer(function(req, res, proxy) {
     return;
 });
 
-proxyserver.listen(80);
+var stack = require('stack'),
+    creationix = require('creationix');
+
+var rootDirBlog = (process.env.NODE_ROOT_DIR ? process.env.NODE_ROOT_DIR : __dirname +"/..");
+rootDirBlog += '/blog.rohben.com';
+
+http.createServer(stack(
+  creationix.log(),
+  require('wheat')(rootDirBlog)
+)).listen(8081);
+
+http.createServer(function(req, res, proxy) {
+    console.log("lab.rohben.com");
+    res.write("lab.rohben.com");
+    res.end();
+}).listen(8082);
+
+console.log("rootBlog --> " + rootDirBlog);
+
+var port = (process.env.PRODUCTION ? 80 : 8080);
+
+proxyserver.listen(port);
+
+console.log("Proxy on port " + port);
 
 /*  var options = { */
 /*      /\*  This is more efficient when routing purely on http 'Host' header. *\/ */
