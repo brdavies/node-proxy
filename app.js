@@ -1,5 +1,6 @@
-var http_proxy = require('http-proxy'),
-    http  = require('http');
+var httpProxy = require('http-proxy'),
+    http  = require('http'),
+    url   = require('url');
 
 var backend, backends, find_backend, i, proxyserver, standard_options, _i, _len;
 
