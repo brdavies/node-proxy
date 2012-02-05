@@ -1,0 +1,17 @@
+{
+    "author": "Ben Davies <ben@rohben.com> (http://rohben.com/ben)",
+    "name": "proxy.rohben.com",
+    "description": "Proxy for routing requests on *.rohben.com",
+    "version": "0.0.0",
+    "engines": {
+        "node": ">=0.4.0"
+    },
+    "dependencies": {
+        "stack": ">=0.0.3",
+        "creationix": ">=0.1.2",
+        "wheat": ">=0.2.0",
+        "cluster": ">=0.6.4",
+        "http-proxy": ">= 0.8.0"
+    },
+    "devDependencies": {}
+}
