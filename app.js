@@ -1,4 +1,4 @@
-var proxy = require('http-proxy'),
+var httpProxy = require('http-proxy'),
     http  = require('http');
 
 var options = {
@@ -7,8 +7,8 @@ var options = {
 
     /*   The routes. */
     router: {
-        '*lab.rohben.com'  : '127.0.0.1:8081',
-        '*blog.rohben.com' : '127.0.0.1:8082'
+        'lab.rohben.com'  : '127.0.0.1:8081',
+        'blog.rohben.com' : '127.0.0.1:8082'
     }
 };
 
@@ -25,7 +25,20 @@ http.createServer(stack(
 
 console.log("rootBlog --> " + rootDirBlog);
 
-var proxyServer = proxy.createServer(options);
-proxyServer.listen(80);
+var port = (process.env.PRODUCTION ? 80 : 8080);
 
-console.log("Proxy on port " + 80);
+var server = httpProxy.createServer(options);
+server.listen(port);
+
+//
+// Listen for the `proxyError` event on `server.proxy`. _It will not
+// be raised on the server itself._
+server.proxy.on('proxyError', function (err, req, res) {
+  res.writeHead(500, {
+    'Content-Type': 'text/plain'
+  });
+  
+  res.end('Something went wrong. And we are reporting a custom error message.');
+});
+
+console.log("Proxy on port " + port);
