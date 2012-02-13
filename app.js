@@ -1,146 +1,108 @@
-var httpProxy = require('http-proxy'),
-    http  = require('http'),
-    url   = require('url');
 
-var backend, backends, find_backend, i, proxyserver, standard_options, _i, _len;
+var util = require('util'),
+    colors = require('colors'),
+    http = require('http'),
+    httpProxy = require('http-proxy'),
+    net_binding = require('net');
 
-backends = [
-    {
-        name  : 'blog.rohben.com',
-        host  : 'http://127.0.0.1:8081',
-        paths : ['']
-    },
-    {
-        name  : 'lab.rohben.com',
-        host  : 'http://127.0.0.1:8082',
-        paths : ['']
+var opt = require('optimist');
+
+/**
+ * Table of command line options. Each object must have the 's' (short), 'l'
+ * (long), and 'usage' properties. Optional properties are 'default'. */
+var options = [{
+    s       : 'p',
+    l       : 'port',
+    default : '80',
+    usage   : 'Port number to listen on.'
+}, {
+    s       : 'u',
+    l       : 'user',
+    usage   : 'User to switch to after binding to the port. Only required if binding to port less than 1024.'
+}, {
+    s       : 'h',
+    l       : 'help',
+    usage   : 'Display help for this application.'
+}];
+
+/**
+ * Command line help.
+ *
+ * @note For some reason showHelp() doesn't word-wrap usage so terminate each
+ * line with '\n'. */
+var usage = '\
+\n\
+Node.js application to reverse proxy incoming http requests received on a\n\
+specified port to applications listening on other ports. For binding to ports\n\
+less than 1024 the application must be run with root privileges, however if\n\
+specified it will drop back to running as an unprivileged user after binding to\n\
+the port.\n\
+';
+
+opt = opt.wrap(80);
+opt = opt.usage(usage);
+
+for (var i = 0; i < options.length; i++) {
+    opt = opt.describe(options[i].s, options[i].usage);
+    if (options[i].l) {
+        opt = opt.alias(options[i].l, options[i].s);
     }
-];
+    if (options[i].default) {
+        opt = opt.default(options[i].s, options[i].default);
+    }
+}
+var argv = opt.argv;
 
-standard_options = function(t) {
-    return {
-        target: {
-            host: t.hostname,
-            port: t.port,
-            https: t.protocol === 'https:'
-        },
-        enable: {
-            xforward: true
-        }
-    };
-};
-
-for (_i = 0, _len = backends.length; _i < _len; _i++) {
-    backend = backends[_i];
-    backend.paths = (function() {
-        var _j, _len2, _ref, _results;
-        _ref = backend.paths;
-        _results = [];
-        for (_j = 0, _len2 = _ref.length; _j < _len2; _j++) {
-            i = _ref[_j];
-            _results.push(new RegExp(i));
-        }
-        return _results;
-    })();
-    backend.options = standard_options(url.parse(backend.host));
+if (argv.help) {
+    opt.showHelp();
+    process.exit();    
 }
 
-find_backend = function(req) {
-    var backend, m, path, pathname, _j, _k, _len2, _len3, _ref;
-    pathname = url.parse(req.url).pathname;
-    console.log("pathname --> " + pathname);
-    for (_j = 0, _len2 = backends.length; _j < _len2; _j++) {
-        backend = backends[_j];
-        _ref = backend.paths;        
-        for (_k = 0, _len3 = _ref.length; _k < _len3; _k++) {
-            path = _ref[_k];
-            console.log("  path --> " + path);
-            m = path.exec(pathname);
-            if (m) return backend;
-        }
-    }
-    return null;
-};
+if (argv.port) {
+    console.log("port = " + argv.port + "\n");
+}
+if (argv.user) {
+    console.log("user = " + argv.user + "\n");
+}
 
-proxyserver = httpProxy.createServer(function(req, res, proxy) {
-    console.log("request: " + req.url);
-    backend = find_backend(req);
-    if (backend) {
-        proxy.proxyRequest(req, res, backend.options);
-        return this;
-    }
-    try {
-        res.writeHead(404);
-        res.end();
-    } catch (error) {
-        console.error("res.writeHead/res.end error: %s", error.message);
-    }
-    return;
+process.exit();
+
+/*  optimist.usage('Create a proxy server'); */
+/*  optimist.demand('p'); */
+/*  optimist.alias('port', 'p'); */
+/*  optimist.describe('port', 'Create a webserver on this port.'); */
+/*  var argv = optimist.argv; */
+
+if (argv.port) {
+    console.log("port = " + argv.port + "\n");
+}
+
+
+
+//
+// Http Proxy Server with Proxy Table
+//
+var server = httpProxy.createServer({
+  router: {
+      'blog.rohben.com'     : 'localhost:8001',
+      'www.blog.rohben.com' : 'localhost:8001',
+      'test.localhost'      : 'localhost:3000',
+      'blog.localhost'      : 'localhost:8001'
+  }
 });
 
-var stack = require('stack'),
-    creationix = require('creationix');
-
-var rootDirBlog = (process.env.NODE_ROOT_DIR ? process.env.NODE_ROOT_DIR : __dirname +"/..");
-rootDirBlog += '/blog.rohben.com';
-
-http.createServer(stack(
-  creationix.log(),
-  require('wheat')(rootDirBlog)
-)).listen(8081);
-
-http.createServer(function(req, res, proxy) {
-    console.log("lab.rohben.com");
-    res.write("lab.rohben.com");
-    res.end();
-}).listen(8082);
-
-console.log("rootBlog --> " + rootDirBlog);
-
-var port = (process.env.PRODUCTION ? 80 : 8080);
-
-proxyserver.listen(port);
-
-console.log("Proxy on port " + port);
-
-/*  var options = { */
-/*      /\*  This is more efficient when routing purely on http 'Host' header. *\/ */
-/*      /\*  hostnameOnly: true, *\/ */
-
-/*      /\*   The routes. *\/ */
-/*      router: { */
-/*          'lab.rohben.com'  : '127.0.0.1:8081', */
-/*          'blog.rohben.com' : '127.0.0.1:8082' */
-/*      } */
-/*  }; */
-
-/*  var stack = require('stack'), */
-/*      creationix = require('creationix'); */
-
-/*  var rootDirBlog = (process.env.NODE_ROOT_DIR ? process.env.NODE_ROOT_DIR : __dirname +"/.."); */
-/*  rootDirBlog += '/blog.rohben.com'; */
-
-/*  http.createServer(stack( */
-/*    creationix.log(), */
-/*    require('wheat')(rootDirBlog) */
-/*  )).listen(8082); */
-
-/*  console.log("rootBlog --> " + rootDirBlog); */
-
-/*  var port = (process.env.PRODUCTION ? 80 : 8080); */
-
-/*  var server = httpProxy.createServer(options); */
-/*  server.listen(port); */
-
-/*  // */
-/*  // Listen for the `proxyError` event on `server.proxy`. _It will not */
-/*  // be raised on the server itself._ */
-/*  server.proxy.on('proxyError', function (err, req, res) { */
-/*    res.writeHead(500, { */
-/*      'Content-Type': 'text/plain' */
-/*    }); */
-
-/*    res.end('Something went wrong. And we are reporting a custom error message.'); */
+/*  server.listen(80, function() { */
+/*      process.setuid('ben'); */
 /*  }); */
 
-/*  console.log("Proxy on port " + port); */
+//
+// Target Http Server
+//
+/*  http.createServer(function (req, res) { */
+/*    res.writeHead(200, { 'Content-Type': 'text/plain' }); */
+/*    res.write('request successfully proxied to: ' + req.url + '\n' + JSON.stringify(req.headers, true, 2)); */
+/*    res.end(); */
+/*  }).listen(9000); */
+
+util.puts('http proxy server '.blue + 'started '.green.bold + 'on port '.blue + '8001 '.yellow + 'with proxy table'.magenta.underline);
+util.puts('http server '.blue + 'started '.green.bold + 'on port '.blue + '9000 '.yellow); 
