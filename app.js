@@ -5,24 +5,25 @@ var util = require('util'),
     httpProxy = require('http-proxy'),
     net_binding = require('net');
 
-var opt = require('optimist');
+var program = require('commander');
 
 /**
- * Table of command line options. Each object must have the 's' (short), 'l'
- * (long), and 'usage' properties. Optional properties are 'default'. */
+ * Table of command line options. Each object must have the following
+ * properties:
+ * - option: 
+ *
+ * Optional properties:
+ * default: default value for the option.
+ * 
+ * 'opt' and 'usage'
+ * properties. Optional properties are 'default'. */
 var options = [{
-    s       : 'p',
-    l       : 'port',
-    default : '80',
-    usage   : 'Port number to listen on.'
+    option   : '-p, --port <number>',
+    usage    : 'Port number to listen on.',
+    default  : '80'
 }, {
-    s       : 'u',
-    l       : 'user',
-    usage   : 'User to switch to after binding to the port. Only required if binding to port less than 1024.'
-}, {
-    s       : 'h',
-    l       : 'help',
-    usage   : 'Display help for this application.'
+    option   : '-u, --user <name>',
+    usage    : 'User to switch to after binding to the port. Only required if binding to port less than 1024.'
 }];
 
 /**
@@ -31,53 +32,72 @@ var options = [{
  * @note For some reason showHelp() doesn't word-wrap usage so terminate each
  * line with '\n'. */
 var usage = '\
-\n\
-Node.js application to reverse proxy incoming http requests received on a\n\
-specified port to applications listening on other ports. For binding to ports\n\
-less than 1024 the application must be run with root privileges, however if\n\
-specified it will drop back to running as an unprivileged user after binding to\n\
-the port.\n\
+Node.js application to reverse proxy incoming http requests received on a\
+specified port to applications listening on other ports. For binding to ports\
+less than 1024 the application must be run with root privileges, however if\
+specified it will drop back to running as an unprivileged user after binding to\
+that port.\
 ';
 
-opt = opt.wrap(80);
-opt = opt.usage(usage);
+/**
+ * Word wrap at a specified column.
+ *
+ * @return
+ *     The resulting string.
+ * @param[in] str
+ *     The string to be word-wrapped.
+ * @param[in] width
+ *     Column width (default 75).
+ * @param[in] brk
+ *     The characters to be inserted at every break.
+ * @param[in] cut
+ *     If the cut is set to TRUE, the string is always wrapped at or before
+ *     the specified width. So if you have a word that is larger than the
+ *     given width, it is broken apart.
+ */
+var wrap_usage = function(str, width, brk, cut) {
 
-for (var i = 0; i < options.length; i++) {
-    opt = opt.describe(options[i].s, options[i].usage);
-    if (options[i].l) {
-        opt = opt.alias(options[i].l, options[i].s);
-    }
-    if (options[i].default) {
-        opt = opt.default(options[i].s, options[i].default);
-    }
-}
-var argv = opt.argv;
+    brk = brk || '\n';
+    width = width || 75;
+    cut = cut || false;
 
-if (argv.help) {
-    opt.showHelp();
-    process.exit();    
+    if (!str) { return str; }
+
+    var regex = '.{1,' +width+ '}(\\s|$)' + (cut ? '|.{' +width+ '}|.+$' : '|\\S+?(\\s|$)');
+
+    return str.match( RegExp(regex, 'g') ).join( brk );
+
+};
+
+var width = process.stdout.getWindowSize()[0];
+
+if ((width > 80) || (width < 10)) {
+    width = 80;
 }
 
-if (argv.port) {
-    console.log("port = " + argv.port + "\n");
+for (i = 0; i < options.length; i++) {
+    var help = wrap_usage(options[i].usage, width - 11, "\n      ", true);
+    program = program.option(
+        options[i].option, "\n      " + help + "\n", options[i].default
+    );
 }
-if (argv.user) {
-    console.log("user = " + argv.user + "\n");
+
+if (usage.indexOf('\n', 0) < 0) {
+    /* If there are newlines in the usage string then assume the string has bene
+     * explicitly cut, otherwise wrap the text. */
+    usage = "\n\n  " + wrap_usage(usage, width - 3, "\n  ", false);
 }
+
+program = program
+    .usage(usage)
+    .version('0.0.1')
+    .parse(process.argv);
+
+console.log("port %d\n", program.port);
+console.log("user " + program.user);
+
 
 process.exit();
-
-/*  optimist.usage('Create a proxy server'); */
-/*  optimist.demand('p'); */
-/*  optimist.alias('port', 'p'); */
-/*  optimist.describe('port', 'Create a webserver on this port.'); */
-/*  var argv = optimist.argv; */
-
-if (argv.port) {
-    console.log("port = " + argv.port + "\n");
-}
-
-
 
 //
 // Http Proxy Server with Proxy Table
