@@ -5,18 +5,10 @@ var util = require('util'),
     httpProxy = require('http-proxy'),
     net_binding = require('net');
 
-var program = require('commander');
+var arg = require('./args');
 
 /**
- * Table of command line options. Each object must have the following
- * properties:
- * - option: 
- *
- * Optional properties:
- * default: default value for the option.
- * 
- * 'opt' and 'usage'
- * properties. Optional properties are 'default'. */
+ * Table of command line options. */
 var options = [{
     option   : '-p, --port <number>',
     usage    : 'Port number to listen on.',
@@ -27,10 +19,7 @@ var options = [{
 }];
 
 /**
- * Command line help.
- *
- * @note For some reason showHelp() doesn't word-wrap usage so terminate each
- * line with '\n'. */
+ * Command line help. */
 var usage = '\
 Node.js application to reverse proxy incoming http requests received on a\
 specified port to applications listening on other ports. For binding to ports\
@@ -39,62 +28,10 @@ specified it will drop back to running as an unprivileged user after binding to\
 that port.\
 ';
 
-/**
- * Word wrap at a specified column.
- *
- * @return
- *     The resulting string.
- * @param[in] str
- *     The string to be word-wrapped.
- * @param[in] width
- *     Column width (default 75).
- * @param[in] brk
- *     The characters to be inserted at every break.
- * @param[in] cut
- *     If the cut is set to TRUE, the string is always wrapped at or before
- *     the specified width. So if you have a word that is larger than the
- *     given width, it is broken apart.
- */
-var wrap_usage = function(str, width, brk, cut) {
+var args = arg.parse("0.0.1", usage, options, process.argv);
 
-    brk = brk || '\n';
-    width = width || 75;
-    cut = cut || false;
-
-    if (!str) { return str; }
-
-    var regex = '.{1,' +width+ '}(\\s|$)' + (cut ? '|.{' +width+ '}|.+$' : '|\\S+?(\\s|$)');
-
-    return str.match( RegExp(regex, 'g') ).join( brk );
-
-};
-
-var width = process.stdout.getWindowSize()[0];
-
-if ((width > 80) || (width < 10)) {
-    width = 80;
-}
-
-for (i = 0; i < options.length; i++) {
-    var help = wrap_usage(options[i].usage, width - 11, "\n      ", true);
-    program = program.option(
-        options[i].option, "\n      " + help + "\n", options[i].default
-    );
-}
-
-if (usage.indexOf('\n', 0) < 0) {
-    /* If there are newlines in the usage string then assume the string has bene
-     * explicitly cut, otherwise wrap the text. */
-    usage = "\n\n  " + wrap_usage(usage, width - 3, "\n  ", false);
-}
-
-program = program
-    .usage(usage)
-    .version('0.0.1')
-    .parse(process.argv);
-
-console.log("port %d\n", program.port);
-console.log("user " + program.user);
+console.log("port %d\n", args.port);
+console.log("user " + args.user);
 
 
 process.exit();
