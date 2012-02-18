@@ -2,7 +2,6 @@
  * of --help. For everything else it is identical. */
 var program = require('./commander');
 
-
 /**
  * Function to parse command line options.
  *
