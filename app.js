@@ -11,5 +11,5 @@ var routes = {
   }    
 };
 
-/*  */
+/* Start the proxy server. */
 router.run(routes);

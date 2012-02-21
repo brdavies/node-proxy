@@ -1,10 +1,11 @@
 var util = require('util'),
     colors = require('colors'),
     http = require('http'),
-    httpProxy = require('http-proxy');
+    httpProxy = require('http-proxy'),
+    cluster = require('cluster');
 
 /**
- * 
+ * Start the proxy server.
  */
 exports.run = function(routes) {
 
@@ -20,6 +21,10 @@ exports.run = function(routes) {
     }, {
         option   : '-u, --user <name>',
         usage    : 'User to switch to after binding to the port. Only required if binding to port less than 1024.'
+    }, {
+        option   : '-w, --workers [count]',
+        usage    : 'Number of worker threads.',
+        default  : '1'
     }];
 
     /**
@@ -42,10 +47,12 @@ that port.\
      * @param[in] msg
      *     The error message.
      */
-    var app_error = function(msg) {
+    var app_error = function(msg, no_exit) {
         process.stderr.write('ERROR: '.red);
         process.stderr.write(msg + '\n');
-        process.exit(1);
+        if (!no_exit) {
+            process.exit(1);
+        }
     };
 
     /**
@@ -81,7 +88,8 @@ that port.\
 
         util.puts('HTTP Proxy listening on port ' + args.port.toString().yellow);
     };
-    
+
+    /* Use commander.js to parse command line arguments. */
     var args = arg.parse(version, usage, options, process.argv);
 
     if ((args.port < 1024) && (!args.user)) {
@@ -91,25 +99,79 @@ that port.\
         process.exit(1);
     }
 
-    var server = httpProxy.createServer(routes);
+    var server;
 
-    server.on('error', function(error) {
-        if ((args.port < 1024) && (error.code == 'EACCES')) {
-            app_error('Administrator privileges required for port ' + args.port);
+    var server_start = function() {
+
+        var online = 0;
+
+        server = httpProxy.createServer(routes);
+
+        server.on('error', function(error) {
+            if ((args.port < 1024) && (error.code == 'EACCES')) {
+                app_error('Administrator privileges required for port ' + args.port);
+            } else {
+                app_error(error);
+            }
+        });
+
+        if ((args.workers > 1) && (cluster.isMaster)) {
+            for (var i = 0; i < args.workers; i++) {
+                var worker = cluster.fork();
+
+                worker.on('message', function(msg) {
+                    if (msg.cmd == 'online') {
+                        online++;
+                    }
+                });
+            }
+
+            /*  if (args.user) { */
+            /*      /\* Drop privileges. *\/ */
+            /*      process.setuid(args.user); */
+            /*  } */
+
+            cluster.on('death', function(worker) {
+                console.log('worker ' + worker.pid + ' died.');
+            });
         } else {
-            app_error(error);
+            server.listen(args.port, function() {
+                if (args.user) {
+                    /* Drop privileges. */
+                    process.setuid(args.user);
+                }
+                /* Print some useful information. */
+                if (args.workers <= 1) {
+                    app_status();
+                } else {
+                    process.send({ ben: 'was here' });
+                }
+            });
+        }
+    };
+
+    var server_stop = function(shutdown) {
+        if (server) {
+            server.close();
+            server = undefined;
+        }
+    };
+
+    process.on("SIGHUP", function() {
+        /* Restart the server on SIGHUP signal. This can't be done bound to a
+         * privileged port (< 1024), it won't be able to rebind since it is
+         * currently running as a regular user. */
+        if (args.port < 80) {
+            app_error(
+                "Ignoring SIGHUP, won't be able to rebind to " + args.port,
+                1
+            );
+        } else {
+            console.log("Received SIGHUP, restarting server...");
+            server_stop();
+            server_start();
         }
     });
 
-
-    server.listen(args.port, function() {
-        if (args.user) {
-            
-            /* Drop privileges. */
-            process.setuid(args.user);
-
-            app_status();
-        }
-    });
-
+    server_start();
 };
