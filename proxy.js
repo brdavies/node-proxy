@@ -10,7 +10,6 @@ var util = require('util'),
 exports.run = function(routes) {
 
     var arg = require('./args');
-    var fmt = require('./sprintf');
 
     /**
      * Table of command line options. */
@@ -41,6 +40,16 @@ that port.\
      * Current version of this application. */
     var version = "1.0.0";
 
+    /* Use commander.js to parse command line arguments. */
+    var args = arg.parse(version, usage, options, process.argv);
+
+    if ((args.port < 1024) && (!args.user)) {
+        /* If running on a privileged port a user must be specified so the
+         * application can drop to that user after opening the port. */
+        app_error('User must be specified for port ' + args.port + ' (see --user).');
+        process.exit(1);
+    }    
+
     /**
      * Helper function to print error messages.
      *
@@ -51,8 +60,19 @@ that port.\
         process.stderr.write('ERROR: '.red);
         process.stderr.write(msg + '\n');
         if (!no_exit) {
-            process.exit(1);
+            app_exit(1);
         }
+    };
+
+    /**
+     * Helper function to print status messages.
+     *
+     * @param[in] msg
+     *     The message to print.
+     */
+    var app_info = function(msg) {
+        process.stderr.write('INFO : '.green);
+        process.stderr.write(msg + '\n');
     };
 
     /**
@@ -79,99 +99,115 @@ that port.\
         }
 
         for (to in table) {
-
+            console.log("\nRouting:".green);
             table[to].forEach(function(from) {
                 console.log("%s", from.blue);
             });
-            console.log("==> " + to.green + '\n');
+            console.log("==> " + to.green);
         }
 
-        util.puts('HTTP Proxy listening on port ' + args.port.toString().yellow);
+        util.puts('\nHTTP Proxy listening on port ' + args.port.toString().yellow);
     };
 
-    /* Use commander.js to parse command line arguments. */
-    var args = arg.parse(version, usage, options, process.argv);
-
-    if ((args.port < 1024) && (!args.user)) {
-        /* If running on a privileged port a user must be specified so the
-         * application can drop to that user after opening the port. */
-        app_error('User must be specified for port ' + args.port + ' (see --user).');
-        process.exit(1);
-    }
-
     var server;
+    var worker_count = 0;
+    var workers = {};
 
-    var server_start = function() {
+    var worker_start = function() {
 
-        var online = 0;
+        var worker = cluster.fork();
 
-        server = httpProxy.createServer(routes);
+        workers[worker.pid] = worker;
 
-        server.on('error', function(error) {
-            if ((args.port < 1024) && (error.code == 'EACCES')) {
-                app_error('Administrator privileges required for port ' + args.port);
-            } else {
-                app_error(error);
+        worker.on('message', function(msg) {
+            if (msg.cmd == 'ready') {
+                worker_count++;
+                app_info(
+                    "Worker " + worker_count +
+                        " of " + args.workers +
+                        " online.");
+                if (worker_count == args.workers) {
+                    app_status();
+
+                    /* Drop privileges. */
+                    process.setuid(args.user);
+                }
             }
         });
+    };
+
+    var app_start = function() {
 
         if ((args.workers > 1) && (cluster.isMaster)) {
             for (var i = 0; i < args.workers; i++) {
-                var worker = cluster.fork();
-
-                worker.on('message', function(msg) {
-                    if (msg.cmd == 'online') {
-                        online++;
-                    }
-                });
+                worker_start();
             }
 
-            /*  if (args.user) { */
-            /*      /\* Drop privileges. *\/ */
-            /*      process.setuid(args.user); */
-            /*  } */
-
             cluster.on('death', function(worker) {
-                console.log('worker ' + worker.pid + ' died.');
+                app_error('Worker ' + worker.pid + ' died.', 1);
+                delete workers[worker.pid];
+                worker_count--;
+                worker_start();
             });
+
         } else {
+            server = httpProxy.createServer(routes);
+
+            server.on('error', function(error) {
+                if ((args.port < 1024) && (error.code == 'EACCES')) {
+                    app_error('Administrator privileges required for port ' + args.port);
+                } else {
+                    app_error(error);
+                }
+            });
+            
             server.listen(args.port, function() {
                 if (args.user) {
                     /* Drop privileges. */
                     process.setuid(args.user);
                 }
-                /* Print some useful information. */
                 if (args.workers <= 1) {
+                    /* There are no child processes (workers), print some useful
+                     * information. */
                     app_status();
                 } else {
-                    process.send({ ben: 'was here' });
+                    process.send({ cmd: 'ready' });
                 }
             });
         }
     };
 
-    var server_stop = function(shutdown) {
+    var app_exit = function(status, signal) {
         if (server) {
             server.close();
             server = undefined;
         }
+        if (cluster.isMaster) {
+            console.log("");
+            for (var pid in workers) {
+                if (!workers.hasOwnProperty(pid)) {
+                    continue;
+                }
+                try {                    
+                    app_info("Kill child " + pid);
+                    process.kill(pid);
+                } catch (e) {
+                    console.log(e);
+                }
+            }
+            if (signal) {
+                signal = " (" + signal + ")";
+            }
+            
+            app_info("Exit" + signal + " with status " + status);
+        }
+        
+        process.exit(status);
     };
 
-    process.on("SIGHUP", function() {
-        /* Restart the server on SIGHUP signal. This can't be done bound to a
-         * privileged port (< 1024), it won't be able to rebind since it is
-         * currently running as a regular user. */
-        if (args.port < 80) {
-            app_error(
-                "Ignoring SIGHUP, won't be able to rebind to " + args.port,
-                1
-            );
-        } else {
-            console.log("Received SIGHUP, restarting server...");
-            server_stop();
-            server_start();
-        }
-    });
+    process.on("SIGKILL", function() { app_exit(0, "SIGKILL"); });
+    process.on("SIGTERM", function() { app_exit(0, "SIGTERM"); });
+    process.on("SIGINT", function() { app_exit(0, "SIGINT"); });
 
-    server_start();
+    app_start();
 };
