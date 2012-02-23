@@ -232,6 +232,8 @@ that port.\
             }
             if (signal) {
                 signal = " (" + signal + ")";
+            } else {
+                signal = "";
             }
 
             app_info("Exit" + signal + " with status " + status);
@@ -254,8 +256,8 @@ that port.\
         /* If running on a privileged port a user must be specified so the
          * application can drop to that user after opening the port. */
         app_error('User must be specified for port ' + args.port + ' (see --user).');
-        process.exit(1);
-    }
+        process.exit(1); 
+   }
 
     app_start();
 };
