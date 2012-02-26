@@ -61,7 +61,11 @@ exports.parse = function(version, usage, options, argv) {
 
     };
 
-    var width = process.stdout.getWindowSize()[0];
+    var width = 0;
+
+    if (process.stdout.getWindowSize) {
+        width = process.stdout.getWindowSize()[0];
+    }
 
     if ((width > 80) || (width < 10)) {
         width = 80;

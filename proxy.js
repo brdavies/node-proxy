@@ -33,6 +33,9 @@ exports.run = function(routes) {
         option   : '-u, --user <name>',
         usage    : 'User to switch to after binding to the port. Only required if binding to port less than 1024.'
     }, {
+        option   : '-g, --group <name>',
+        usage    : 'Group to switch to after binding to the port.'
+    }, {
         option   : '-w, --workers [count]',
         usage    : 'Number of worker threads.',
         default  : '1'
@@ -143,8 +146,11 @@ that port.\
                     app_status();
 
                     /* Drop privileges. */
-                    if (args.user ) {
+                    if (args.user) {
                         process.setuid(args.user);
+                    }
+                    if (args.group) {
+                        process.setguid(args.user);
                     }
                 }
             }
@@ -191,6 +197,9 @@ that port.\
                     /* Drop privileges. */
                     process.setuid(args.user);
                 }
+                if (args.group) {
+                        process.setguid(args.user);
+                }
                 if (args.workers <= 1) {
                     /* There are no workers (the master is the proxy), print
                      * some useful information about the proxy server. */
@@ -217,7 +226,10 @@ that port.\
      */
     var app_exit = function(status, signal) {
         if (server) {
-            server.close();
+            try {
+                server.close();
+            } catch (e) {
+            }
             server = undefined;
         }
         if (cluster.isMaster) {
