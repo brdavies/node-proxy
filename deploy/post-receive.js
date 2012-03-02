@@ -1,13 +1,46 @@
-var table = [{
-    branch : "c",
+/**
+ * @file post-receive.js
+ * 
+ * @brief git post-receive script (in javascript).
+ *
+ * @section usage Usage Instructions
+ *
+ * -# Copy this post-receive.js file to the 'hooks' directory of your
+ *    repository. If gitolite is used to host the repository this will be
+ *    something like '/srv/git/repositories/node.proxy.git/hooks'.
+ *    
+ * -# Edit or create post-receive (a shell script) in the same location (e.g.
+ *    '/srv/git/repositories/node.proxy.git/hooks/post-receive') and add:
+ *    
+ *    node ./hooks/post-receive.js
+ *
+ * -# Modify @ref action_table to perform different actions when changes are
+ *    made to different branches in the repository.
+ *
+ * @section post_receive Git Post Receive
+ *
+ * Revisions are fed in to the git post-receive hook from stdin. The input may
+ * contain multiple lines formatted as "old_rev new_rev ref". 
+ */
+
+/**
+ * This table defines what to do when a specific branch is modified. The 'exec'
+ * key can be one of the following:
+ *
+ * string: a system command to execute. The command receives three arguments,
+ * "old revision", "new revision", and "referenece". For example, if 'exec' is
+ * "echo" the script will print something like "4b6f... 33d1... master" (where
+ * "4b6f..." and "33d1..." are full revisions).
+ *
+ * function: a function to call. The function receives three arguments, "old
+ * revision", "new revision", and "referenece".
+ */
+var action_table = [{
+    branch : "live",
     exec   : "echo"
 } , {
-    branch : "g",
-    exec   : function(rev_old, rev_new, branch) {
-        console.log("old    = " + rev_old);
-        console.log("new    = " + rev_new);
-        console.log("branch = " + branch);
-    }
+    branch : "dev",
+    exec   : "echo"
 }];
 
 var post_receive = function(table) {
@@ -80,4 +113,4 @@ var post_receive = function(table) {
     });
 };
 
-post_receive(table);
+post_receive(action_table);
