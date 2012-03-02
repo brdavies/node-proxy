@@ -7,7 +7,7 @@ var routes = {
       'www.blog.rohben.com' : 'localhost:8001',      
       'blog.localhost'      : 'localhost:8001'
 
-      /* Add new entries here.... */
+      /* Add new entries here... */
   }    
 };
 
