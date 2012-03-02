@@ -24,16 +24,7 @@
  */
 
 /**
- * This table defines what to do when a specific branch is modified. The 'exec'
- * key can be one of the following:
- *
- * string: a system command to execute. The command receives three arguments,
- * "old revision", "new revision", and "referenece". For example, if 'exec' is
- * "echo" the script will print something like "4b6f... 33d1... master" (where
- * "4b6f..." and "33d1..." are full revisions).
- *
- * function: a function to call. The function receives three arguments, "old
- * revision", "new revision", and "referenece".
+ * This table defines what to do when a specific branch is modified. 
  */
 var action_table = [{
     branch : "live",
@@ -43,11 +34,40 @@ var action_table = [{
     exec   : "echo"
 }];
 
+/**
+ * This function reads git revision data from stdin and executions actions
+ * (defined in @p table) based on what branches have been modified.
+ *
+ * @param[in] table
+ *     This table defines what to do when a specific branch is modified. The 'exec'
+ *     key can be one of the following:
+ *      
+ *     string: a system command to execute. The command receives three arguments,
+ *     "old revision", "new revision", and "referenece". For example, if 'exec' is
+ *     "echo" the script will print something like "4b6f... 33d1... master" (where
+ *     "4b6f..." and "33d1..." are full revisions).
+ *      
+ *     function: a function to call. The function receives three arguments, "old
+ *     revision", "new revision", and "referenece".
+ */
 var post_receive = function(table) {
 
     var exec = require('child_process').exec;
     var git_output = "";
 
+    /**
+     * This function executes the system command defined by @p cmd, passing
+     * it @p rev_old, @p rev_new, and @p branch as command line arguments.
+     *
+     * @param[in] cmd
+     *     A system command to execute (e.g. "echo").
+     * @param[in] rev_old
+     *     Old git revision (e.g. "4b6f298ae8af9c467ff7c048dacf6a042550ab52").
+     * @param[in] rev_new
+     *     New git revision.
+     * @param[in] branch
+     *     The git branch that changed (e.g. "master").
+     */
     var run = function(cmd, rev_old, rev_new, branch) {
         var c = exec(cmd + " " + rev_old + " " + rev_new + " " + branch);
 
