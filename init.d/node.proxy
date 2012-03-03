@@ -53,9 +53,10 @@ start() {
         chown $user $pidfile
 
         # Launch the application
-        daemon --user=root \
-            $forever start -p $forever_dir --pidfile $pidfile -l $logfile \
-            -a -d $SOURCE_DIR $SOURCE_FILE
+        ${forever} start -l forever.log -o out.log -e err.log ${SOURCE_DIR}/$SOURCE_FILE
+        # daemon --user=root \
+        #     $forever start -p $forever_dir --pidfile $pidfile -l $logfile \
+        #     -a -d $SOURCE_DIR $SOURCE_FILE
         RETVAL=$?
     else
         echo "Instance already running"
@@ -66,6 +67,7 @@ start() {
 stop() {
     echo -n "Shutting down $NAME node instance : "
     if [ "$foreverid" != "" ]; then
+
 
         # TODO: Call a server script to gracefully shutdown the application.
         # $node $SOURCE_DIR/prepareForStop.js
@@ -79,7 +81,7 @@ stop() {
 if [ -f $pidfile ]; then
     read pid < $pidfile
 else
-    pid = ""
+    pid=""
 fi
 
 if [ "$pid" != "" ]; then
