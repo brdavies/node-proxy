@@ -1,97 +1,126 @@
 #!/bin/bash
 #
-# There is some perhaps unnecessary complexity going on in the relationship between
-# Forever and the server process. See: https://github.com/indexzero/forever
-#
-# 1) Forever starts its own watchdog process, and keeps its own configuration data
-# in /var/run/forever.
-#
-# 2) If the process dies, Forever will restart it: if it fails but continues to run,
-# it won't be restarted.
-#
-# 3) If the process is stopped via this script, the pidfile is left in place; this
-# helps when issues happen with failed stop attempts.
-#
-# 4) Which means the check for running/not running is complex, and involves parsing
-# of the Forever list output.
+# initd-example      Node init.d
 #
 # chkconfig: 345 80 20
-# description: my application description
-# processname: my_application_name
-# pidfile: /var/run/my_application_name.pid
-# logfile: /var/log/my_application_name.log
+# description: Node init.d example
+# processname: node
+# pidfile: /var/run/initd-example.pid
+# logfile: /var/log/initd-example.log
 #
 
-# Source function library.
+. /etc/rc.conf
 . /etc/rc.d/functions
 
-NAME=node.proxy
-SOURCE_DIR="/srv/node/node.proxy"
-SOURCE_FILE="app.js --user node --group node --port 80"
+NAME=node.proxy                          # Unique name for the application
+PORT=80                                  # Port (in this case the application uses process.env.PORT to set the port)
+INSTANCE_DIR=/srv/node/node.proxy/live   # Location of the application source
+SOURCE_NAME=app.js                       # Name os the applcation entry point script
+
+APP_COUNT=2
+
+# APP_1_NAME="node.proxy"
+# APP_1_DIR="/srv/node.proxy"
+# APP_1_SCRIPT="app.js"
+# APP_1_ARGS="--port 80 --user node"
+
+APP_2_NAME="blog"
+APP_2_DIR="/srv/blog"
+APP_2_SCRIPT="server/server.js"
+APP_2_ARGS=""
+
+    	# /usr/bin/forever start
+	#     -p /var/run/forever
+	#     --pidFile /var/run/node.proxy.pid
+	#     --append
+	#     -l /var/log/node.proxy.log
+	#     /home/ben/rohben/node.proxy/app.js
+	#         --user node
+	#         --port 80
 
 user=node
-pidfile=/var/run/$NAME.pid
-logfile=/var/log/$NAME.log
+pidfile_dir=/var/run
+logfile=/var/log/forever.log
+
+# Forever root directory.
 forever_dir=/var/run/forever
 
 node=node
 forever=forever
+awk=awk
 sed=sed
-
-export PATH=$PATH:/home/node/local/node/bin
 
 start() {
     echo "Starting $NAME node instance: "
 
-    if [ "$foreverid" == "" ]; then
+    if [ "$id" = "" ]; then
         # Create the log and pid files, making sure that the target use has
         # access to them
         touch $logfile
         chown $user $logfile
 
-        touch $pidfile
-        chown $user $pidfile
+        mkdir -p $forever_dir
+
+        for (( c=1; c<=${APP_COUNT}; c++ )) ; do
+            app_name=APP_${c}_NAME
+            app_dir=APP_${c}_DIR
+            app_script=APP_${c}_SCRIPT
+            app_args=APP_${c}_ARGS
+
+            eval app_name=\$$app_name
+            eval app_dir=\$$app_dir
+            eval app_script=\$$app_script
+            eval app_args=\$$app_args
+
+            # Get the real directory name.
+            app_dir=`cd ${app_dir} && pwd -P`
+
+            pidfile="${pidfile_dir}/${app_name}.pid"
+
+            touch $pidfile
+            chown $user $pidfile
+
+            echo "app_name   --> ${app_name}"
+            echo "app_dir    --> ${app_dir}"
+            echo "app_script --> ${app_script}"
+            echo "app_args   --> ${app_args}"
+            echo "pidfile    --> ${pidfile}"
+
+            start_daemon
+                $forever start -p $forever_dir --pidFile $pidfile --append -l $logfile $app_dir/$app_script $app_args
+
+            RETVAL=$?
+        done
 
         # Launch the application
-        ${forever} start -l forever.log -o out.log -e err.log ${SOURCE_DIR}/$SOURCE_FILE
-        # daemon --user=root \
-        #     $forever start -p $forever_dir --pidfile $pidfile -l $logfile \
-        #     -a -d $SOURCE_DIR $SOURCE_FILE
-        RETVAL=$?
+        # start_daemon
+        #     $forever start -p $forever_dir --pidFile $pidfid --append -l /var/log/forever.log /home/ben/rohben/node.proxy/app.js --port 80 --user node
+
     else
         echo "Instance already running"
         RETVAL=0
     fi
 }
 
+restart() {
+    echo -n "Restarting $NAME node instance : "
+    if [ "$id" != "" ]; then
+        $forever restartall -p $forever_dir
+        RETVAL=$?
+    else
+        start
+    fi
+}
+
 stop() {
-    echo -n "Shutting down $NAME node instance : "
-    if [ "$foreverid" != "" ]; then
-
-
-        # TODO: Call a server script to gracefully shutdown the application.
-        # $node $SOURCE_DIR/prepareForStop.js
-        $forever stop -p $forever_dir $id
+    echo -n "Shutting down $NAME node instance (${id}): "
+    if [ "$id" != "" ]; then
+        $forever stopall -p $forever_dir
     else
         echo "Instance is not running";
     fi
     RETVAL=$?
 }
-
-if [ -f $pidfile ]; then
-    read pid < $pidfile
-else
-    pid=""
-fi
-
-if [ "$pid" != "" ]; then
-  # Gnarly sed usage to obtain the foreverid.
-    sed1="/$pid\]/p"
-    sed2="s/.*\[\([0-9]\+\)\].*\s$pid\].*/\1/g"
-    foreverid=`$forever list -p $forever_dir | $sed -n $sed1 | $sed $sed2`
-else
-    foreverid=""
-fi
 
 case "$1" in
     start)
@@ -103,9 +132,124 @@ case "$1" in
     status)
         status -p ${pidfile}
         ;;
+    restart)
+        restart
+        ;;
     *)
-        echo "Usage:  {start|stop|status}"
+        echo "Usage:  {start|stop|status|restart}"
         exit 1
         ;;
 esac
 exit $RETVAL
+
+# #!/bin/bash
+# #
+# # There is some perhaps unnecessary complexity going on in the relationship between
+# # Forever and the server process. See: https://github.com/indexzero/forever
+# #
+# # 1) Forever starts its own watchdog process, and keeps its own configuration data
+# # in /var/run/forever.
+# #
+# # 2) If the process dies, Forever will restart it: if it fails but continues to run,
+# # it won't be restarted.
+# #
+# # 3) If the process is stopped via this script, the pidfile is left in place; this
+# # helps when issues happen with failed stop attempts.
+# #
+# # 4) Which means the check for running/not running is complex, and involves parsing
+# # of the Forever list output.
+# #
+# # chkconfig: 345 80 20
+# # description: my application description
+# # processname: my_application_name
+# # pidfile: /var/run/my_application_name.pid
+# # logfile: /var/log/my_application_name.log
+# #
+
+# # Source function library.
+# . /etc/rc.d/functions
+
+# NAME=node.proxy
+# SOURCE_DIR="/srv/node/node.proxy"
+# SOURCE_FILE="app.js --user node --group node --port 80"
+
+# user=node
+# pidfile=/var/run/$NAME.pid
+# logfile=/var/log/$NAME.log
+# forever_dir=/var/run/forever
+
+# node=node
+# forever=forever
+# sed=sed
+
+# export PATH=$PATH:/home/node/local/node/bin
+
+# start() {
+#     echo "Starting $NAME node instance: "
+
+#     if [ "$foreverid" == "" ]; then
+#         # Create the log and pid files, making sure that the target use has
+#         # access to them
+#         touch $logfile
+#         chown $user $logfile
+
+#         touch $pidfile
+#         chown $user $pidfile
+
+#         # Launch the application
+#         ${forever} start -l forever.log -o out.log -e err.log ${SOURCE_DIR}/$SOURCE_FILE
+#         # daemon --user=root \
+#         #     $forever start -p $forever_dir --pidfile $pidfile -l $logfile \
+#         #     -a -d $SOURCE_DIR $SOURCE_FILE
+#         RETVAL=$?
+#     else
+#         echo "Instance already running"
+#         RETVAL=0
+#     fi
+# }
+
+# stop() {
+#     echo -n "Shutting down $NAME node instance : "
+#     if [ "$foreverid" != "" ]; then
+
+
+#         # TODO: Call a server script to gracefully shutdown the application.
+#         # $node $SOURCE_DIR/prepareForStop.js
+#         $forever stop -p $forever_dir $id
+#     else
+#         echo "Instance is not running";
+#     fi
+#     RETVAL=$?
+# }
+
+# if [ -f $pidfile ]; then
+#     read pid < $pidfile
+# else
+#     pid=""
+# fi
+
+# if [ "$pid" != "" ]; then
+#   # Gnarly sed usage to obtain the foreverid.
+#     sed1="/$pid\]/p"
+#     sed2="s/.*\[\([0-9]\+\)\].*\s$pid\].*/\1/g"
+#     foreverid=`$forever list -p $forever_dir | $sed -n $sed1 | $sed $sed2`
+# else
+#     foreverid=""
+# fi
+
+# case "$1" in
+#     start)
+#         start
+#         ;;
+#     stop)
+#         stop
+#         ;;
+#     status)
+#         status -p ${pidfile}
+#         ;;
+#     *)
+#         echo "Usage:  {start|stop|status}"
+#         exit 1
+#         ;;
+# esac
+# exit $RETVAL
